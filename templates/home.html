@@ -1,0 +1,70 @@
+{% extends "shared.html" %}
+
+{% block content %}
+<div class="container-xxl">
+    <div class="row">
+        <div class="col-5">
+            <h2 class="mt-3">Raspberry Pi AI Camera Demo</h2>
+            <p>This demo runs MobileNetV2 model on Raspberry Pi AI Camera.</p>
+            <p>Click on the button below to start the camera stream.</p>
+            {% for camera_num in camera_list %}
+            <div class="d-flex flex-row align-items-center">
+                <div class="p-2 align-middle">
+                    Camera {{ camera_num }}
+                </div>
+                <div class="p-2 align-middle">
+                    <button class="btn btn-primary btn-custom" id="camera_{{ camera_num }}_start" onclick='handleButtonClick(this, "{{ camera_num }}")'>Start</button>
+                </div>
+                <div class="p-2 align-middle">
+                    <button class="btn btn-primary btn-custom" id="camera_{{ camera_num }}_stop" onclick="handleButtonClick(this, '{{ camera_num }}')" disabled>Stop</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="col-7">
+            <div class="row mt-3 border rounded-3 px-0">
+                <img class="img-fluid rounded-3 px-0" id="cameraImage" style="min-width: 320px; min-height: 320px;background-color: gray;" src="data:,">
+            </div>
+        </div>
+    </div>
+    <script>
+
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('DOMContentLoaded');
+        });
+
+        // document.getElementById('myButton').addEventListener('click', handleButtonClick);
+
+        function handleButtonClick(button, camera_num) {
+
+            const cameraImage = document.getElementById('cameraImage');
+
+            if (button.id.includes('start')) {
+                console.log(`Starting camera stream for camera ${camera_num}`);
+                cameraImage.src = "{{ url_for('start_video_stream', camera_num=0) }}";
+                button.disabled = true; // Disable the start button
+                const stopButton = document.getElementById(`camera_${camera_num}_stop`);
+                stopButton.disabled = false; // Enable the stop button
+
+            } else if (button.id.includes('stop')) {
+                console.log(`Stopping camera stream for camera ${camera_num}`);
+                cameraImage.src = null;
+                fetch(`/stop_video_stream_${camera_num}`)
+                    .then(response => {
+                        if (response.ok) {
+                            console.log(`Camera ${camera_num} stream stopped successfully.`);
+                            cameraImage.src = 'data:,'
+                            button.disabled = true; // Disable the stop button
+                            const startButton = document.getElementById(`camera_${camera_num}_start`);
+                            startButton.disabled = false; // Enable the start button
+                        } else {
+                            console.error(`Failed to stop camera ${camera_num} stream.`);
+                        }
+                    })
+                    .catch(error => console.error('Error stopping camera stream:', error));
+            }
+        }
+
+
+    </script>
+    {% endblock %}
