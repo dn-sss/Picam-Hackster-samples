@@ -61,9 +61,13 @@ class Imx500CameraObject:
 
     def stop_video_streaming(self):
         if self.picamera2 and self.picamera2.started:
+            self.picamera2.stop_recording()
             self.picamera2.stop()
+            # self.picamera2.stop_encoder()
+            self.stream_output = None
             self.picamera2.close()
             self.picamera2 = None
+            del self.imx500
             self.imx500 = None
             print(f"Camera {self.camera_num} stopped.")
         else:

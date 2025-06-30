@@ -5,6 +5,7 @@ import time
 import json
 import argparse
 import atexit
+import secrets
 import numpy as np
 from camera_manager import CameraManager
 from video_streaming import StreamingOutput
@@ -16,6 +17,16 @@ from mobilenetv2 import Mobilenetv2_Annotater
 # Global camera manager instance
 camera_manager = CameraManager()
 
+@atexit.register
+def app_exit():
+    print("Exiting app.")
+
+# Init Flask
+app = Flask(__name__)
+app.secret_key = secrets.token_hex(16)
+
+# Set Logging from Picamera2
+Picamera2.set_logging(Picamera2.DEBUG)
 
 def generate_stream(camera):
     while True:
@@ -25,19 +36,6 @@ def generate_stream(camera):
         if frame:
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-
-@atexit.register
-def app_exit():
-    print("Exiting app.")
-
-# Init Flask
-app = Flask(__name__)
-
-# Set Logging from Picamera2
-Picamera2.set_logging(Picamera2.DEBUG)
-
-# Globals
-stream_output = None
 
 @app.route('/')
 def home():
@@ -76,12 +74,11 @@ def stop_video_stream(camera_num):
     camera = camera_manager.get_imx500_camera_object(camera_num)
     try:
         if camera:
-            camera.video_streaming_stop()
+            camera.stop_video_streaming()
         response_data = {'result': 'success'}
         return jsonify(response_data)
     except Exception as e:
         return jsonify(success=False, error=str(e))
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='AiPiCam Demo')
