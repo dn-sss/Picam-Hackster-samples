@@ -49,10 +49,9 @@ class Mobilenetv2_Annotater:
     def pre_callback(self, request):
         try:
             fps = 0
-            new_frame_time = time()
-            if (self.last_frame_time != 0):
-                fps = 1 / (new_frame_time - self.last_frame_time)
-            self.last_frame_time = new_frame_time
+            current_frame_time = time()
+            fps = 1 / (current_frame_time - self.last_frame_time)
+            self.last_frame_time = current_frame_time
             metadata = request.get_metadata()
             self.last_results = self.parse_metadata(metadata)
             self.draw_detections(request, fps)
