@@ -17,12 +17,14 @@
 # Inspired by the Picamera2 examples, this code annotates the MobileNet SSD v2 inference results
 # Based on https://github.com/raspberrypi/picamera2/blob/main/examples/imx500/imx500_object_detection_demo.py
 
+from time import time
 import cv2
 import numpy as np
 from functools import lru_cache
 from picamera2 import MappedArray
 from picamera2.devices.imx500 import (NetworkIntrinsics,
                                       postprocess_nanodet_detection)
+
 class Detection:
     def __init__(self, coords, category, conf, metadata, imx500, picam2):
         """Create a Detection object, recording the bounding box, category and confidence."""
@@ -41,16 +43,21 @@ class Mobilenetv2_Annotater:
         self.iou = iou
         self.max_detections = max_detections
         self.last_results = None
+        self.last_frame_time = 0
 
     # A callback function from Picamera2 that is called before the image is processed by the video encoders or preview windows.
     def pre_callback(self, request):
         try:
+            fps = 0
+            new_frame_time = time()
+            if (self.last_frame_time != 0):
+                fps = 1 / (new_frame_time - self.last_frame_time)
+            self.last_frame_time = new_frame_time
             metadata = request.get_metadata()
             self.last_results = self.parse_metadata(metadata)
-            self.draw_detections(request)
+            self.draw_detections(request, fps)
         except Exception as e:
-            print(f"Exception : {e}")
-            breakpoint()
+            print(f"Exception in pre_callback() : {e}")
 
     def parse_metadata(self, metadata: dict):
         intrinsics = self.imx500.network_intrinsics
@@ -87,7 +94,7 @@ class Mobilenetv2_Annotater:
         ]
         return results
 
-    def draw_detections(self, request):
+    def draw_detections(self, request, fps):
         """Draw the detections for this request onto the ISP output."""
         detections = self.last_results
         if detections is None:
@@ -96,6 +103,7 @@ class Mobilenetv2_Annotater:
         labels = self.get_labels()
         intrinsics = self.imx500.network_intrinsics
         image_w = self.imx500_camera_object.picamera2.video_configuration.main.size[0]
+        image_h = self.imx500_camera_object.picamera2.video_configuration.main.size[1]
         line_thickness = round(6 * (image_w / 2048))
         font_scale = round(1 * (image_w / 2048))
 
@@ -105,14 +113,16 @@ class Mobilenetv2_Annotater:
                 label = f"{labels[int(detection.category)]} ({(detection.conf * 100):.1f}%)"
 
                 # Calculate text size and position
-                (text_w, text_h), text_base = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 1)
+                (text_w, text_h), text_base = cv2.getTextSize(text=label,
+                                                              fontFace=cv2.FONT_HERSHEY_DUPLEX  ,
+                                                              fontScale=font_scale,
+                                                              thickness=1)
                 margin = round(text_h * 0.1)
-                text_x = x + line_thickness + margin 
+                text_x = x + line_thickness + margin
                 text_y = y + line_thickness + margin + text_h
 
                 # Create a copy of the array to draw the background with opacity
                 overlay = m.array.copy()
-
                 # Draw the background rectangle on the overlay
                 rect_x = x + round(line_thickness/2)
                 rect_y = y + round(line_thickness/2)
@@ -127,18 +137,41 @@ class Mobilenetv2_Annotater:
                 alpha = 0.30
                 cv2.addWeighted(overlay, alpha, m.array, 1 - alpha, 0, m.array)
 
+
                 # Draw text on top of the background
-                cv2.putText(m.array, label, (text_x, text_y),
-                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), 1)
+                cv2.putText(m.array,
+                            text=label,
+                            org=(text_x, text_y),
+                            fontFace=cv2.FONT_HERSHEY_DUPLEX  ,
+                            fontScale=font_scale,
+                            color=(0, 0, 0),
+                            thickness=1)
 
                 # Draw detection box
-                cv2.rectangle(m.array, (x, y), (x + w, y + h), (0, 255, 0, 0), thickness=line_thickness)
+                cv2.rectangle(m.array,
+                              pt1=(x, y),
+                              pt2=(x + w, y + h),
+                              color=(0, 255, 0),
+                              thickness=line_thickness)
 
-            if intrinsics.preserve_aspect_ratio:
-                b_x, b_y, b_w, b_h = self.imx500.get_roi_scaled(request)
-                color = (255, 0, 0)  # red
-                cv2.putText(m.array, "ROI", (b_x + 5, b_y + 15), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 4)
-                cv2.rectangle(m.array, (b_x, b_y), (b_x + b_w, b_y + b_h), (255, 0, 0, 0))
+            fps_text = f"FPS: {int(fps)}"
+
+            (text_w, text_h), text_base = cv2.getTextSize(text=fps_text,
+                                                          fontFace=cv2.FONT_HERSHEY_DUPLEX  ,
+                                                          fontScale=font_scale,
+                                                          thickness=1)
+            margin = round(text_h * 0.1)
+            text_x = image_w - text_w - margin
+            text_y = image_h - text_h - margin
+
+            # Draw FPS text on the right bottom corner
+            cv2.putText(m.array,
+                        text=fps_text,
+                        org=(text_x, text_y),
+                        fontFace=cv2.FONT_HERSHEY_DUPLEX  ,
+                        fontScale=font_scale,
+                        color=(0, 0, 0),
+                        thickness=1)
 
     @lru_cache
     def get_labels(self):
