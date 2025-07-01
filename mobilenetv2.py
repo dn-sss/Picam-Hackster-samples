@@ -1,9 +1,10 @@
+# Inspired by the Picamera2 examples, this code annotates the MobileNet SSD v2 inference results
+# Based on https://github.com/raspberrypi/picamera2/blob/main/examples/imx500/imx500_object_detection_demo.py
+
 import cv2
 import numpy as np
 from functools import lru_cache
-
-from picamera2 import Picamera2
-from picamera2 import Picamera2, MappedArray, CompletedRequest
+from picamera2 import MappedArray
 from picamera2.devices.imx500 import (NetworkIntrinsics,
                                       postprocess_nanodet_detection)
 class Detection:
@@ -13,25 +14,29 @@ class Detection:
         self.conf = conf
         self.box = imx500.convert_inference_coords(coords, metadata, picam2)
 
+# A class to annotate Mobile Net SSD v2 inference results.
+# Taken codes from the Picamera2 examples.
+
 class Mobilenetv2_Annotater:
-    def __init__(self, imx500_camera_object):
+    def __init__(self, imx500_camera_object, detection_threashold=0.55, iou=0.65, max_detections=10):
         self.imx500_camera_object = imx500_camera_object
         self.imx500 = imx500_camera_object.imx500
-        self.detection_threashold = 0.55
-        self.iou = 0.65
-        self.max_detections = 10
+        self.detection_threashold = detection_threashold
+        self.iou = iou
+        self.max_detections = max_detections
         self.last_results = None
 
+    # A callback function from Picamera2 that is called before the image is processed by the video encoders or preview windows.
     def pre_callback(self, request):
         try:
             metadata = request.get_metadata()
-            self.last_results = self.parse_detections(metadata)
+            self.last_results = self.parse_metadata(metadata)
             self.draw_detections(request)
         except Exception as e:
             print(f"Exception : {e}")
+            breakpoint()
 
-    def parse_detections(self, metadata: dict):
-        """Parse the output tensor into a number of detected objects, scaled to the ISP output."""
+    def parse_metadata(self, metadata: dict):
         intrinsics = self.imx500.network_intrinsics
         bbox_normalization = intrinsics.bbox_normalization
         bbox_order = intrinsics.bbox_order
@@ -39,27 +44,25 @@ class Mobilenetv2_Annotater:
         iou = self.iou
         max_detections = self.max_detections
 
+        # Gets output tensor from IMX500.
         np_outputs = self.imx500.get_outputs(metadata, add_batch=True)
+
+        # Gets Model Input Tensor Size
         input_w, input_h = self.imx500.get_input_size()
 
+        # If no outputs, return previous results so that the screen won't flicker.
         if np_outputs is None:
             return self.last_results
 
-        if intrinsics.postprocess == "nanodet":
-            boxes, scores, classes = \
-                postprocess_nanodet_detection(outputs=np_outputs[0], conf=threshold, iou_thres=iou,
-                                            max_out_dets=max_detections)[0]
-            from picamera2.devices.imx500.postprocess import scale_boxes
-            boxes = scale_boxes(boxes, 1, 1, input_h, input_w, False, False)
-        else:
-            boxes, scores, classes = np_outputs[0][0], np_outputs[1][0], np_outputs[2][0]
-            if bbox_normalization:
-                boxes = boxes / input_h
+        # from https://github.com/raspberrypi/picamera2/blob/main/examples/imx500/imx500_object_detection_demo.py
+        boxes, scores, classes = np_outputs[0][0], np_outputs[1][0], np_outputs[2][0]
+        if bbox_normalization:
+            boxes = boxes / input_h
 
-            if bbox_order == "xy":
-                boxes = boxes[:, [1, 0, 3, 2]]
-            boxes = np.array_split(boxes, 4, axis=1)
-            boxes = zip(*boxes)
+        if bbox_order == "xy":
+            boxes = boxes[:, [1, 0, 3, 2]]
+        boxes = np.array_split(boxes, 4, axis=1)
+        boxes = zip(*boxes)
 
         results = [
             Detection(box, category, score, metadata, self.imx500, self.imx500_camera_object.picamera2)
@@ -83,7 +86,7 @@ class Mobilenetv2_Annotater:
         with MappedArray(request, 'main') as m:
             for detection in detections:
                 x, y, w, h = detection.box
-                label = f"{labels[int(detection.category)]} ({detection.conf:.2f})"
+                label = f"{labels[int(detection.category)]} ({(detection.conf * 100):.1f}%)"
 
                 # Calculate text size and position
                 (text_w, text_h), text_base = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 1)
@@ -102,7 +105,7 @@ class Mobilenetv2_Annotater:
                 cv2.rectangle(overlay,
                             (rect_x, rect_y),
                             ((rect_x + rect_w), (rect_y + rect_h)),
-                            (255, 255, 255),  # Background color (white)
+                            (255, 255, 255), 
                             cv2.FILLED)
 
                 alpha = 0.30
@@ -110,7 +113,7 @@ class Mobilenetv2_Annotater:
 
                 # Draw text on top of the background
                 cv2.putText(m.array, label, (text_x, text_y),
-                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 255), 1)
+                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), 1)
 
                 # Draw detection box
                 cv2.rectangle(m.array, (x, y), (x + w, y + h), (0, 255, 0, 0), thickness=line_thickness)

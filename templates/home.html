@@ -1,87 +1,78 @@
-{% extends "shared.html" %}
-
-{% block content %}
+{% extends "shared.html" %} {% block content %}
 <div class="container-xxl">
-    <div class="row">
-        <div class="col-5">
-            <h2 class="mt-3">Raspberry Pi AI Camera Demo</h2>
-            <p>This demo runs MobileNetV2 model on Raspberry Pi AI Camera.</p>
-            <p>Click on the button below to start the camera stream.</p>
-            {% for camera_num in camera_list %}
-            <div class="d-flex flex-row align-items-center">
-                <div class="p-2 align-left">
-                    Camera {{ camera_num }}
-                </div>
-                <div class="p-2 align-middle">
-                    <button class="btn btn-primary btn-custom" id="camera_{{ camera_num }}_start" onclick='handleButtonClick(this, "{{ camera_num }}")'>Start</button>
-                </div>
-                <div class="p-2 align-middle">
-                    <button class="btn btn-primary btn-custom" id="camera_{{ camera_num }}_stop" onclick="handleButtonClick(this, '{{ camera_num }}')" disabled>Stop</button>
-                </div>
-            </div>
-            <div class="d-flex flex-row align-items-center">
-                <div class="p-2 align-left" id="camera_{{ camera_num }}_status">
-                </div>
-            </div> 
-            {% endfor %}
+  <div class="row">
+    <div class="col-5">
+      <h2 class="mt-3">Mobilenet SSD v2 Object Detection</h2>
+      <p>This demo runs MobileNet SSD V2 model on Raspberry Pi AI Camera.</p>
+      <p>Click on the button below to start the camera stream.</p>
+      {% for camera_num in camera_list %}
+      <div class="d-flex flex-row align-items-center">
+        <div class="p-2 align-left">Camera {{ camera_num }}</div>
+        <div class="p-2 align-middle">
+          <button class="btn btn-primary btn-custom" id="camera_{{ camera_num }}_start" onclick='handleButtonClick(this, "{{ camera_num }}")'>Start</button>
         </div>
-        <div class="col-7">
-            <div class="row mt-3 border rounded-3 px-0" style="min-width: 320px; min-height: 320px;background-color:#3E455C;opacity: 0.5;">
-                <img class="img-fluid rounded-3 px-0" id="cameraImage"  src="data:," onerror="this.style.display='none';" onload="img_loaded(this);">
-            </div>
+        <div class="p-2 align-middle">
+          <button class="btn btn-primary btn-custom" id="camera_{{ camera_num }}_stop" onclick="handleButtonClick(this, '{{ camera_num }}')" disabled>Stop</button>
         </div>
+      </div>
+      <div class="d-flex flex-row align-items-center">
+        <div class="p-2 align-left" id="camera_{{ camera_num }}_status"></div>
+      </div>
+      {% endfor %}
     </div>
-    <script>
+    <div class="col-7">
+      <div class="row mt-3 border rounded-3 px-0" style="min-width: 320px; min-height: 320px; background-color: #d1d3d9">
+        <img class="img-fluid rounded-3 px-0" id="cameraImage" src="data:," onerror="this.style.display='none';" onload="img_loaded(this);" />
+      </div>
+    </div>
+  </div>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      console.log("DOMContentLoaded");
+    });
 
-        document.addEventListener('DOMContentLoaded', function () {
-            console.log('DOMContentLoaded');
-        });
+    var current_camera_num = 0;
 
-        var current_camera_num = 0;
+    function img_loaded(img) {
+      img.style.display = "block";
+      const cameraStatus = document.getElementById(`camera_${current_camera_num}_status`);
+      cameraStatus.textContent = "";
+    }
 
-        function img_loaded(img) {
-            img.style.display='block';
-            const cameraStatus = document.getElementById(`camera_${current_camera_num}_status`);
-            cameraStatus.textContent = "";
-        }
+    function handleButtonClick(button, camera_num) {
+      const cameraImage = document.getElementById("cameraImage");
+      const cameraStatus = document.getElementById(`camera_${camera_num}_status`);
 
-        function handleButtonClick(button, camera_num) {
-
-            const cameraImage = document.getElementById('cameraImage');
-            const cameraStatus = document.getElementById(`camera_${camera_num}_status`);
-
-            if (button.id.includes('start')) {
-                current_camera_num
-                console.log(`Starting camera stream for camera ${camera_num}`);
-                cameraImage.src = "{{ url_for('start_video_stream', camera_num=0) }}";
-                cameraStatus.textContent = `Starting Mobilenet v2 inference on Camera ${camera_num}`;
-                button.disabled = true; // Disable the start button
-                const stopButton = document.getElementById(`camera_${camera_num}_stop`);
-                stopButton.disabled = false; // Enable the stop button
-
-            } else if (button.id.includes('stop')) {
-                console.log(`Stopping camera stream for camera ${camera_num}`);
-                cameraImage.src = null;
-                cameraStatus.textContent = '';
-                fetch(`/stop_video_stream_${camera_num}`)
-                    .then(response => {
-                        if (response.ok) {
-                            console.log(`Camera ${camera_num} stream stopped successfully.`);
-                            cameraImage.src = 'data:,'
-                            button.disabled = true; // Disable the stop button
-                            const startButton = document.getElementById(`camera_${camera_num}_start`);
-                            startButton.disabled = false; // Enable the start button
-                        } else {
-                            console.error(`Failed to stop camera ${camera_num} stream.`);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error stopping camera stream:', error);
-                        cameraStatus.textContent = `Error stopping camera ${camera_num} stream.`;
-                    });
+      if (button.id.includes("start")) {
+        current_camera_num;
+        console.log(`Starting camera stream for camera ${camera_num}`);
+        cameraImage.src = "{{ url_for('start_video_stream', camera_num=0) }}";
+        cameraStatus.textContent = `Starting Mobilenet v2 inference on Camera ${camera_num}`;
+        button.disabled = true; // Disable the start button
+        const stopButton = document.getElementById(`camera_${camera_num}_stop`);
+        stopButton.disabled = false; // Enable the stop button
+      } else if (button.id.includes("stop")) {
+        console.log(`Stopping camera stream for camera ${camera_num}`);
+        cameraImage.src = null;
+        cameraStatus.textContent = "";
+        fetch(`/stop_video_stream_${camera_num}`)
+          .then((response) => {
+            if (response.ok) {
+              console.log(`Camera ${camera_num} stream stopped successfully.`);
+              cameraImage.src = "data:,";
+              button.disabled = true; // Disable the stop button
+              const startButton = document.getElementById(`camera_${camera_num}_start`);
+              startButton.disabled = false; // Enable the start button
+            } else {
+              console.error(`Failed to stop camera ${camera_num} stream.`);
             }
-        }
-
-
-    </script>
-    {% endblock %}
+          })
+          .catch((error) => {
+            console.error("Error stopping camera stream:", error);
+            cameraStatus.textContent = `Error stopping camera ${camera_num} stream.`;
+          });
+      }
+    }
+  </script>
+  {% endblock %}
+</div>

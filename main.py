@@ -1,52 +1,45 @@
-import os
-import io
-import sys
-import time
-import json
 import argparse
 import atexit
 import secrets
-import numpy as np
-from camera_manager import CameraManager
-from video_streaming import StreamingOutput
-from flask import Flask, render_template, Response, request, abort, jsonify
-from pprint import pprint, pformat
 from picamera2 import Picamera2
+from camera_manager import CameraManager
+from flask import Flask, render_template, Response, abort, jsonify
 from mobilenetv2 import Mobilenetv2_Annotater
 
-# Global camera manager instance
+# Global camera manager instance to keep track of cameras
 camera_manager = CameraManager()
 
+# Register an exit handler to clean up resources
 @atexit.register
 def app_exit():
     print("Exiting app.")
+    camera_manager.release_all_cameras()
 
 # Init Flask
 app = Flask(__name__)
+# Set Cookie settings
+# Use a secure random secret key for session management
 app.secret_key = secrets.token_hex(16)
+# Set Same Site to Lax.
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 # Set Logging from Picamera2
 Picamera2.set_logging(Picamera2.DEBUG)
 
-def generate_stream(camera):
-    while True:
-        with camera.stream_output.condition:
-            camera.stream_output.condition.wait()  # Wait for the new frame to be available
-            frame = camera.stream_output.read_frame()
-        if frame:
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-
+# Sets default routing for Home Page
 @app.route('/')
 def home():
     camera_list = camera_manager.refresh_camera_list()
     cameras = [camera.camera_num for camera in camera_list]
     return render_template('home.html', title="Raspberry Pi AI Camera Demo", camera_list=cameras, active_page='home')
 
+# Sets routing to start video streaming and AI inference
 @app.route('/start_video_stream_<int:camera_num>')
 def start_video_stream(camera_num):
+
     print(f">> Starting Video Stream on camera {camera_num}")
 
+    # Get IMX500 camera object based on camera number
     camera = camera_manager.get_imx500_camera_object(camera_num)
 
     if camera is None:
@@ -54,31 +47,42 @@ def start_video_stream(camera_num):
         abort(404)
 
     else:
+        # Use Mobile Net SSD model from "imx500-all" pacakge
+        # To install the model on the Raspberry Pi, run: sudo apt install imx500-all
         imx500 = camera.initialize(ai_model='/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk')
 
         if imx500 is None:
             print(f"Failed to initialize camera {camera_num}.")
             abort(500)
 
-        camera.start_video_streaming()
-
+        # Initialize Mobilenetv2_Annotater to process inference results
+        # This is "Post Porocessing".  You may annotate the images with bounding boxes, labels, trigger events based on inference results, etc.
         annotator = Mobilenetv2_Annotater(camera)
+        # The pre_callback, where the processing happens before the images are supplied to applications, before they arepassed to any video encoders, and before they are passed to any preview windows.
         camera.picamera2.pre_callback = annotator.pre_callback
 
-        # return Response(generate_stream(camera), mimetype='multipart/x-mixed-replace; boundary=frame')
+        # Start video streaming & AI Inference
+        camera.start_video_streaming()
+
         return Response(camera.stream_output.generate_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+
+# Sets routing to stop video streaming and AI inference
 @app.route('/stop_video_stream_<int:camera_num>', methods=['GET'])
 def stop_video_stream(camera_num):
-    print(f">> Stopping Video Stream on camera {camera_num}")
     camera = camera_manager.get_imx500_camera_object(camera_num)
     try:
         if camera:
             camera.stop_video_streaming()
-        response_data = {'result': 'success'}
-        return jsonify(response_data)
+            response_data = {'result': 'success'}
+            return jsonify(response_data)
+        else:
+            response_data = {'result': 'error', 'message': f'Camera {camera_num} not found.'}
+            return jsonify(response_data)
+
     except Exception as e:
         return jsonify(success=False, error=str(e))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='AiPiCam Demo')
