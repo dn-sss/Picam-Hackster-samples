@@ -38,6 +38,7 @@
     var current_camera_num = 0;
 
     function img_loaded(img) {
+      document.querySelector(".loader-container").style.display = "none";
       img.style.display = "block";
       const cameraStatus = document.getElementById(`camera_${current_camera_num}_status`);
       cameraStatus.textContent = "";
