@@ -5,11 +5,11 @@ Wants = network-online.target
 [Service]
 ExecStart=/usr/bin/python3 /home/pi/camera-app/main.py
 WorkingDirectory=/home/pi/camera-app
+User=pi
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
 Type=simple
-User=pi
 
 [Install]
 WantedBy=multi-user.target
