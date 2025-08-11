@@ -20,7 +20,7 @@ import secrets
 from picamera2 import Picamera2
 from camera_manager import CameraManager
 from flask import Flask, render_template, Response, abort, jsonify
-from mobilenetv2 import Mobilenetv2_Annotater
+from mobilenetv2 import Mobilenetv2_Annotator
 
 # Global camera manager instance to keep track of cameras
 camera_manager = CameraManager()
@@ -71,9 +71,9 @@ def start_video_stream(camera_num):
             print(f"Failed to initialize camera {camera_num}.")
             abort(500)
 
-        # Initialize Mobilenetv2_Annotater to process inference results
+        # Initialize Mobilenetv2_Annotator to process inference results
         # This is "Post Porocessing".  You may annotate the images with bounding boxes, labels, trigger events based on inference results, etc.
-        annotator = Mobilenetv2_Annotater(camera)
+        annotator = Mobilenetv2_Annotator(camera)
         # The pre_callback, where the processing happens before the images are supplied to applications, before they arepassed to any video encoders, and before they are passed to any preview windows.
         camera.picamera2.pre_callback = annotator.pre_callback
 
