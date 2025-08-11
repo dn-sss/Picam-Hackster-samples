@@ -35,7 +35,7 @@ class Detection:
 # A class to annotate Mobile Net SSD v2 inference results.
 # Taken codes from the Picamera2 examples.
 
-class Mobilenetv2_Annotater:
+class Mobilenetv2_Annotator:
     def __init__(self, imx500_camera_object, detection_threashold=0.55, iou=0.65, max_detections=10):
         self.imx500_camera_object = imx500_camera_object
         self.imx500 = imx500_camera_object.imx500
